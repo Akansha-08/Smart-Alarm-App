@@ -18,11 +18,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.smartalarmapp.data.Alarm
 import com.example.smartalarmapp.viewmodel.AlarmViewModel
+import androidx.compose.material.icons.filled.Edit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlarmListScreen(
-    onAddAlarm: () -> Unit,              // callback to navigate to Add screen
+    onAddAlarm: () -> Unit,
+    onEditAlarm: (Alarm) -> Unit,          // new callback for editing
     viewModel: AlarmViewModel = viewModel()
 ) {
     // collect StateFlow as Compose State - recomposes when list changes
@@ -79,7 +81,8 @@ fun AlarmListScreen(
                     AlarmCard(
                         alarm = alarm,
                         onToggle = { viewModel.toggleAlarm(alarm) },
-                        onDelete = { viewModel.deleteAlarm(alarm) }
+                        onDelete = { viewModel.deleteAlarm(alarm) },
+                        onEdit = { onEditAlarm(alarm) }   // pass edit callback
                     )
                 }
             }
@@ -91,7 +94,8 @@ fun AlarmListScreen(
 fun AlarmCard(
     alarm: Alarm,
     onToggle: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEdit: () -> Unit                     // new edit callback
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -105,12 +109,20 @@ fun AlarmCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                // format hour and minute to always show 2 digits e.g. 09:05
+                // convert 24hr to 12hr format with AM/PM
+                val displayHour = when {
+                    alarm.hour == 0 -> 12           // midnight = 12 AM
+                    alarm.hour > 12 -> alarm.hour - 12  // PM hours
+                    else -> alarm.hour              // 1-12 AM
+                }
+                val amPm = if (alarm.hour < 12) "AM" else "PM"
+
                 Text(
-                    text = "%02d:%02d".format(alarm.hour, alarm.minute),
+                    text = "%02d:%02d %s".format(displayHour, alarm.minute, amPm),
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold
                 )
+
                 // show label only if it's not empty
                 if (alarm.label.isNotEmpty()) {
                     Text(
@@ -119,16 +131,26 @@ fun AlarmCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                // show repeat days if set
-                if (alarm.repeatDays.isNotEmpty()) {
-                    Text(
-                        text = alarm.repeatDays,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
+                // show repeat label - "Rings once" if no days, else show selected days
+                Text(
+                    text = if (alarm.repeatDays == "Once") "Rings once"
+                    else "Repeats: ${alarm.repeatDays}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (alarm.repeatDays == "Once")
+                        MaterialTheme.colorScheme.onSurfaceVariant  // grey for once
+                    else
+                        MaterialTheme.colorScheme.primary            // blue for repeat
+                )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // edit button
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "Edit Alarm",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
                 // toggle switch to enable/disable alarm
                 Switch(
                     checked = alarm.isEnabled,

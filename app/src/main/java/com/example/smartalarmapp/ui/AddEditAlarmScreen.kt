@@ -18,32 +18,41 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.TimeInput
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditAlarmScreen(
     onNavigateBack: () -> Unit,          // callback to go back to list
+    alarmToEdit: Alarm? = null,            // null means adding new, non-null means editing
     viewModel: AlarmViewModel = viewModel()
 ) {
     // local UI state for form fields
     // time picker state - starts at 7:00 AM by default
+    // pre-fill values from existing alarm if editing, else use defaults
     val timePickerState = rememberTimePickerState(
-        initialHour = 7,
-        initialMinute = 0,
-        is24Hour = false    // shows AM/PM toggle
+        initialHour = alarmToEdit?.hour ?: 7,
+        initialMinute = alarmToEdit?.minute ?: 0,
+        is24Hour = false
     )
-    var showTimePicker by remember { mutableStateOf(false) } // controls dialog visibility
-
-    var label by remember { mutableStateOf("") }
-    var stepCount by remember { mutableStateOf("10") }
-
-    // repeat days toggle state
+    var showTimePicker by remember { mutableStateOf(false) }
+    var showManualInput by remember { mutableStateOf(false) }
+    var label by remember { mutableStateOf(alarmToEdit?.label ?: "") }
+    var stepCount by remember { mutableStateOf(alarmToEdit?.stepCount?.toString() ?: "10") }
     val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-    val selectedDays = remember { mutableStateListOf<String>() }
+    val allDays = "Mon,Tue,Wed,Thu,Fri,Sat,Sun"
+    // pre-select days if editing existing alarm
+    val selectedDays = remember {
+        mutableStateListOf<String>().apply {
+            if (alarmToEdit?.repeatDays != null && alarmToEdit.repeatDays != "Once") {
+                addAll(alarmToEdit.repeatDays.split(","))  // split stored string back to list
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Add Alarm") },
+                title = { Text(if (alarmToEdit != null) "Edit Alarm" else "Add Alarm") },
                 navigationIcon = {
                     // back button
                     IconButton(onClick = onNavigateBack) {
@@ -85,7 +94,7 @@ fun AddEditAlarmScreen(
                 )
             }
 
-            // time picker dialog - shows when showTimePicker is true
+            // time picker dialog
             if (showTimePicker) {
                 Dialog(onDismissRequest = { showTimePicker = false }) {
                     Card(
@@ -101,20 +110,32 @@ fun AddEditAlarmScreen(
                                 "Select Time",
                                 style = MaterialTheme.typography.titleMedium
                             )
-                            // clock dial UI
-                            TimePicker(state = timePickerState)
 
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            if (showManualInput) {
+                                // manual keyboard input mode
+                                TimeInput(state = timePickerState)
+                            } else {
+                                // clock dial mode
+                                TimePicker(state = timePickerState)
+                            }
+
+                            // toggle button between clock and keyboard
+                            TextButton(
+                                onClick = { showManualInput = !showManualInput }
                             ) {
-                                // cancel button
+                                Text(
+                                    // switch label based on current mode
+                                    if (showManualInput) "Switch to Clock" else "Enter time manually"
+                                )
+                            }
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 OutlinedButton(
                                     onClick = { showTimePicker = false },
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Text("Cancel")
                                 }
-                                // confirm button
                                 Button(
                                     onClick = { showTimePicker = false },
                                     modifier = Modifier.weight(1f)
@@ -146,7 +167,12 @@ fun AddEditAlarmScreen(
 
             // repeat days selector
             Text("Repeat", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+
+            // days row with wrap support
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 days.forEach { day ->
                     // toggle chip for each day
                     FilterChip(
@@ -155,30 +181,45 @@ fun AddEditAlarmScreen(
                             if (selectedDays.contains(day)) selectedDays.remove(day)
                             else selectedDays.add(day)
                         },
-                        label = { Text(day, fontSize = 11.sp) }
+                        label = { Text(day, fontSize = 10.sp) }
                     )
                 }
             }
+            // everyday shortcut button
+            FilterChip(
+                selected = selectedDays.containsAll(days),  // true if all days selected
+                onClick = {
+                    if (selectedDays.containsAll(days)) {
+                        selectedDays.clear()                // deselect all if already all selected
+                    } else {
+                        selectedDays.clear()
+                        selectedDays.addAll(days)           // select all days at once
+                    }
+                },
+                label = { Text("Everyday", fontSize = 11.sp) }
+            )
 
             Spacer(modifier = Modifier.weight(1f))
 
             // save button at bottom
             Button(
                 onClick = {
-                    val h = timePickerState.hour    // get hour directly from picker state
-                    val m = timePickerState.minute  // get minute directly from picker state
+                    val h = timePickerState.hour
+                    val m = timePickerState.minute
                     val steps = stepCount.toIntOrNull() ?: 10
-
                     viewModel.saveAlarm(
                         Alarm(
+                            id = alarmToEdit?.id ?: 0,   // keep same ID if editing
                             hour = h,
                             minute = m,
                             label = label,
-                            repeatDays = selectedDays.joinToString(","),
+                            isEnabled = alarmToEdit?.isEnabled ?: true,
+                            repeatDays = if (selectedDays.isEmpty()) "Once"
+                            else selectedDays.joinToString(","),
                             stepCount = steps
                         )
                     )
-                    onNavigateBack()  // go back after saving
+                    onNavigateBack()
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
