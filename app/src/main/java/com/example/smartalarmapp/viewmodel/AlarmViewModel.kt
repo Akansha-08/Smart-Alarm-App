@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.example.smartalarmapp.utils.AlarmScheduler
 
 class AlarmViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -23,18 +24,29 @@ class AlarmViewModel(application: Application) : AndroidViewModel(application) {
             initialValue = emptyList()       // show empty list before DB loads
         )
 
-    // insert or update alarm in background thread
+    // insert or update alarm and schedule it
     fun saveAlarm(alarm: Alarm) = viewModelScope.launch {
         dao.insertAlarm(alarm)
+        // only schedule if alarm is enabled
+        if (alarm.isEnabled) {
+            AlarmScheduler.scheduleAlarm(getApplication(), alarm)
+        }
     }
 
-    // delete alarm in background thread
+    // delete alarm and cancel its schedule
     fun deleteAlarm(alarm: Alarm) = viewModelScope.launch {
         dao.deleteAlarm(alarm)
+        AlarmScheduler.cancelAlarm(getApplication(), alarm)  // cancel from AlarmManager
     }
 
-    // toggle alarm on/off without deleting it
+    // toggle alarm on/off and update schedule accordingly
     fun toggleAlarm(alarm: Alarm) = viewModelScope.launch {
-        dao.updateAlarm(alarm.copy(isEnabled = !alarm.isEnabled))
+        val updated = alarm.copy(isEnabled = !alarm.isEnabled)
+        dao.updateAlarm(updated)
+        if (updated.isEnabled) {
+            AlarmScheduler.scheduleAlarm(getApplication(), updated)  // re-schedule
+        } else {
+            AlarmScheduler.cancelAlarm(getApplication(), updated)    // cancel
+        }
     }
 }
