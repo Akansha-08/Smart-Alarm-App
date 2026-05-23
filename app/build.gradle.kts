@@ -54,6 +54,8 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    // notification support
+    implementation("androidx.core:core-ktx:1.12.0")
 
     // Room
     implementation("androidx.room:room-runtime:2.7.0")
