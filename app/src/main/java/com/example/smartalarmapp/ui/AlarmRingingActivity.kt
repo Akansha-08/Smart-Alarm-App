@@ -17,8 +17,16 @@ import android.os.Build
 import android.view.WindowManager
 import android.app.NotificationManager
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.MediaPlayer
+import android.media.RingtoneManager
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 
 class AlarmRingingActivity : ComponentActivity() {
+    private var mediaPlayer: MediaPlayer? = null   // plays alarm sound
+    private var vibrator: Vibrator? = null         // handles vibration
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,6 +66,12 @@ class AlarmRingingActivity : ComponentActivity() {
             }
         }
 
+        // start alarm sound
+        startAlarmSound()
+
+        // start vibration
+        startVibration()
+
         setContent {
             SmartAlarmAppTheme {
                 // placeholder UI - will be replaced in Step 5
@@ -73,5 +87,68 @@ class AlarmRingingActivity : ComponentActivity() {
                 }
             }
         }
+    }
+    // play default ringtone as alarm sound
+    private fun startAlarmSound() {
+        try {
+            val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            mediaPlayer = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)  // marks as alarm audio
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                setDataSource(this@AlarmRingingActivity, alarmUri)
+                isLooping = true   // keep ringing until dismissed
+                prepare()
+                start()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    // vibrate in pattern - 0ms delay, 500ms on, 500ms off, repeat
+    private fun startVibration() {
+        vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            vibratorManager.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+
+        val pattern = longArrayOf(0, 500, 500)  // delay, vibrate, pause pattern
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator?.vibrate(
+                VibrationEffect.createWaveform(pattern, 0)  // 0 = repeat from start
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator?.vibrate(pattern, 0)
+        }
+    }
+
+    // stop alarm sound and release media player
+    fun stopAlarmSound() {
+        mediaPlayer?.apply {
+            if (isPlaying) stop()
+            release()
+        }
+        mediaPlayer = null
+    }
+
+    // stop vibration
+    fun stopVibration() {
+        vibrator?.cancel()
+        vibrator = null
+    }
+
+    // stop everything if activity is destroyed
+    override fun onDestroy() {
+        super.onDestroy()
+        stopAlarmSound()
+        stopVibration()
     }
 }
