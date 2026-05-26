@@ -1,18 +1,6 @@
 package com.example.smartalarmapp.ui
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.sp
-import com.example.smartalarmapp.ui.theme.SmartAlarmAppTheme
-import com.example.smartalarmapp.data.AlarmDatabase
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import android.os.Build
 import android.view.WindowManager
 import android.app.NotificationManager
@@ -23,6 +11,27 @@ import android.media.RingtoneManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.runtime.*
+import com.example.smartalarmapp.ui.theme.SmartAlarmAppTheme
+import com.example.smartalarmapp.data.AlarmDatabase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
 
 class AlarmRingingActivity : ComponentActivity() {
     private var mediaPlayer: MediaPlayer? = null   // plays alarm sound
@@ -55,6 +64,7 @@ class AlarmRingingActivity : ComponentActivity() {
         val alarmLabel = intent.getStringExtra("ALARM_LABEL") ?: "Alarm"
         val stepCount = intent.getIntExtra("STEP_COUNT", 10)
 
+        // check if alarm was disabled before it could be cancelled
         CoroutineScope(Dispatchers.IO).launch {
             val dao = AlarmDatabase.getDatabase(this@AlarmRingingActivity).alarmDao()
             val alarm = dao.getAlarmById(alarmId)
@@ -74,17 +84,16 @@ class AlarmRingingActivity : ComponentActivity() {
 
         setContent {
             SmartAlarmAppTheme {
-                // placeholder UI - will be replaced in Step 5
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text("⏰ $alarmLabel", fontSize = 32.sp)
-                        Text("Walk $stepCount steps to dismiss", fontSize = 16.sp)
+                AlarmRingingScreen(
+                    alarmLabel = alarmLabel,
+                    stepCount = stepCount,
+                    onDismiss = {
+                        // called when user has walked enough steps
+                        stopAlarmSound()
+                        stopVibration()
+                        finish()
                     }
-                }
+                )
             }
         }
     }
@@ -150,5 +159,82 @@ class AlarmRingingActivity : ComponentActivity() {
         super.onDestroy()
         stopAlarmSound()
         stopVibration()
+    }
+}
+@Composable
+fun AlarmRingingScreen(
+    alarmLabel: String,
+    stepCount: Int,
+    onDismiss: () -> Unit
+) {
+    // pulsing animation for the alarm circle
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = EaseInOut),  // 800ms pulse cycle
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.errorContainer), // red-ish background
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            // pulsing alarm circle
+            Box(
+                modifier = Modifier
+                    .scale(scale)                    // apply pulse animation
+                    .size(150.dp)
+                    .background(
+                        MaterialTheme.colorScheme.error,
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("⏰", fontSize = 60.sp)
+            }
+
+            // alarm label
+            Text(
+                text = alarmLabel,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+
+            // steps instruction
+            Text(
+                text = "Walk $stepCount steps to dismiss",
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // temporary dismiss button - will be replaced by step detection in Step 6
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 32.dp)
+            ) {
+                Text(
+                    "Dismiss (Step detection coming)",
+                    fontSize = 14.sp
+                )
+            }
+        }
     }
 }
