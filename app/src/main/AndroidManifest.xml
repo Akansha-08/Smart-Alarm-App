@@ -35,7 +35,10 @@
             android:name=".ui.AlarmRingingActivity"
             android:exported="false"
             android:showWhenLocked="true"
-            android:turnScreenOn="true" />
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance"/>
 
         <receiver
             android:name=".receiver.AlarmReceiver"
