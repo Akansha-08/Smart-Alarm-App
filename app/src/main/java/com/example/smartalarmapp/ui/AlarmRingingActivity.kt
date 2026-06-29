@@ -68,7 +68,7 @@ class AlarmRingingActivity : ComponentActivity() {
         val alarmLabel = intent.getStringExtra("ALARM_LABEL") ?: "Alarm"
         val stepCount = intent.getIntExtra("STEP_COUNT", 10)
 
-        // check if alarm was disabled before it could be cancelled
+        // check if alarm was disabled before it could be canceled
         CoroutineScope(Dispatchers.IO).launch {
             val dao = AlarmDatabase.getDatabase(this@AlarmRingingActivity).alarmDao()
             val alarm = dao.getAlarmById(alarmId)
@@ -88,6 +88,8 @@ class AlarmRingingActivity : ComponentActivity() {
 
         // state to track current steps in UI
         val currentStepsState = mutableStateOf(0)
+        // state to show warning when invalid step detected
+        val invalidStepState = mutableStateOf(false)
 
         // initialize step detector
         stepDetector = StepDetector(
@@ -95,6 +97,7 @@ class AlarmRingingActivity : ComponentActivity() {
             requiredSteps = stepCount,
             onStepCountChanged = { steps ->
                 currentStepsState.value = steps  // update UI with new step count
+                invalidStepState.value = false  // clear warning on valid step
             },
             onGoalReached = {
                 // goal reached - dismiss alarm
@@ -103,6 +106,12 @@ class AlarmRingingActivity : ComponentActivity() {
                     stopVibration()
                     stepDetector?.stop()
                     finish()
+                }
+            },
+            onInvalidStep = {
+                // show warning on UI thread
+                runOnUiThread {
+                    invalidStepState.value = true  // trigger warning message
                 }
             }
         )
@@ -114,6 +123,7 @@ class AlarmRingingActivity : ComponentActivity() {
                     alarmLabel = alarmLabel,
                     stepCount = stepCount,
                     currentSteps = currentStepsState.value,
+                    invalidStep = invalidStepState.value,  // pass warning state
                     onDismiss = {
                         stopAlarmSound()
                         stopVibration()
@@ -194,6 +204,7 @@ fun AlarmRingingScreen(
     alarmLabel: String,
     stepCount: Int,
     currentSteps: Int = 0,   // live step count from sensor
+    invalidStep: Boolean = false,  // true when invalid step detected
     onDismiss: () -> Unit
 ) {
     // pulsing animation for the alarm circle
@@ -270,6 +281,23 @@ fun AlarmRingingScreen(
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onErrorContainer
             )
+
+            // hint for best step detection
+            Text(
+                text = "💡 Hold phone naturally or keep in pocket",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.5f)
+            )
+
+            // anti-cheat warning - shows when tapping/shaking detected
+            if (invalidStep) {
+                Text(
+                    text = "⚠️ Walk naturally — tapping detected!",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
         }
     }
 }
