@@ -31,11 +31,15 @@ import com.example.smartalarmapp.data.AlarmDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import com.example.smartalarmapp.utils.StepDetector
+import androidx.compose.runtime.mutableStateOf
 
 
 class AlarmRingingActivity : ComponentActivity() {
     private var mediaPlayer: MediaPlayer? = null   // plays alarm sound
     private var vibrator: Vibrator? = null         // handles vibration
+
+    private var stepDetector: StepDetector? = null  // handles step counting
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,15 +86,38 @@ class AlarmRingingActivity : ComponentActivity() {
         // start vibration
         startVibration()
 
+        // state to track current steps in UI
+        val currentStepsState = mutableStateOf(0)
+
+        // initialize step detector
+        stepDetector = StepDetector(
+            context = this,
+            requiredSteps = stepCount,
+            onStepCountChanged = { steps ->
+                currentStepsState.value = steps  // update UI with new step count
+            },
+            onGoalReached = {
+                // goal reached - dismiss alarm
+                runOnUiThread {
+                    stopAlarmSound()
+                    stopVibration()
+                    stepDetector?.stop()
+                    finish()
+                }
+            }
+        )
+        stepDetector?.start()
+
         setContent {
             SmartAlarmAppTheme {
                 AlarmRingingScreen(
                     alarmLabel = alarmLabel,
                     stepCount = stepCount,
+                    currentSteps = currentStepsState.value,
                     onDismiss = {
-                        // called when user has walked enough steps
                         stopAlarmSound()
                         stopVibration()
+                        stepDetector?.stop()
                         finish()
                     }
                 )
@@ -159,12 +186,14 @@ class AlarmRingingActivity : ComponentActivity() {
         super.onDestroy()
         stopAlarmSound()
         stopVibration()
+        stepDetector?.stop()  // unregister sensor listener
     }
 }
 @Composable
 fun AlarmRingingScreen(
     alarmLabel: String,
     stepCount: Int,
+    currentSteps: Int = 0,   // live step count from sensor
     onDismiss: () -> Unit
 ) {
     // pulsing animation for the alarm circle
@@ -179,6 +208,9 @@ fun AlarmRingingScreen(
         label = "scale"
     )
 
+    // progress from 0.0 to 1.0 based on steps walked
+    val progress = (currentSteps.toFloat() / stepCount.toFloat()).coerceIn(0f, 1f)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -187,7 +219,8 @@ fun AlarmRingingScreen(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+            modifier = Modifier.padding(horizontal = 32.dp)
         ) {
             // pulsing alarm circle
             Box(
@@ -211,30 +244,32 @@ fun AlarmRingingScreen(
                 color = MaterialTheme.colorScheme.onErrorContainer
             )
 
-            // steps instruction
+            // live step counter display
             Text(
-                text = "Walk $stepCount steps to dismiss",
-                fontSize = 16.sp,
+                text = "$currentSteps / $stepCount steps",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onErrorContainer
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // temporary dismiss button - will be replaced by step detection in Step 6
-            Button(
-                onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error
-                ),
+            // progress bar showing steps walked
+            LinearProgressIndicator(
+                progress = { progress },             // 0.0 to 1.0
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 32.dp)
-            ) {
-                Text(
-                    "Dismiss (Step detection coming)",
-                    fontSize = 14.sp
-                )
-            }
+                    .height(12.dp),
+                color = MaterialTheme.colorScheme.error,
+                trackColor = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.3f)
+            )
+
+            // instruction text
+            Text(
+                text = if (currentSteps == 0) "Start walking to dismiss!"
+                else if (progress < 1f) "Keep walking... ${stepCount - currentSteps} steps left"
+                else "Done! Dismissing...",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
         }
     }
 }
