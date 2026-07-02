@@ -98,6 +98,7 @@ git clone https://github.com/Akansha-08/Smart-Alarm-App.git
 
 ---
 
-## 👩‍💻 Developer
+## 👩‍💻 Author
 
-**Akansha** — B.Tech CSE @ GNDU 
+**Akansha** 
+B.Tech CSE 
