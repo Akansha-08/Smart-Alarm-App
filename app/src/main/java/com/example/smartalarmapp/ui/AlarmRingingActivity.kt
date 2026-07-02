@@ -33,7 +33,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.example.smartalarmapp.utils.StepDetector
 import androidx.compose.runtime.mutableStateOf
-
+import android.window.OnBackInvokedDispatcher
 
 class AlarmRingingActivity : ComponentActivity() {
     private var mediaPlayer: MediaPlayer? = null   // plays alarm sound
@@ -199,6 +199,26 @@ class AlarmRingingActivity : ComponentActivity() {
         stopVibration()
         stepDetector?.stop()  // unregister sensor listener
     }
+    // prevent back button from dismissing alarm without walking steps
+    @Suppress("MissingSuperCall")
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        // do nothing - back button disabled until steps are completed
+    }
+
+    // disable back gesture on Android 13+
+    override fun onResume() {
+        super.onResume()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT
+            ) {
+                // do nothing - intentionally empty to block back gesture
+            }
+        }
+    }
+
+
 }
 @Composable
 fun AlarmRingingScreen(
