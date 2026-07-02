@@ -26,10 +26,22 @@ class AlarmViewModel(application: Application) : AndroidViewModel(application) {
 
     // insert or update alarm and schedule it
     fun saveAlarm(alarm: Alarm) = viewModelScope.launch {
-        dao.insertAlarm(alarm)
-        // only schedule if alarm is enabled
-        if (alarm.isEnabled) {
-            AlarmScheduler.scheduleAlarm(getApplication(), alarm)
+        if (alarm.id == 0) {
+            // new alarm - get auto-generated ID from Room after insert
+            val newId = dao.insertAlarmAndGetId(alarm)
+            // create copy with real ID so scheduler uses correct ID
+            val savedAlarm = alarm.copy(id = newId.toInt())
+            if (savedAlarm.isEnabled) {
+                AlarmScheduler.scheduleAlarm(getApplication(), savedAlarm)
+            }
+        } else {
+            // existing alarm being edited - cancel old schedule first
+            AlarmScheduler.cancelAlarm(getApplication(), alarm)
+            dao.insertAlarm(alarm)
+            if (alarm.isEnabled) {
+                // reschedule with same ID
+                AlarmScheduler.scheduleAlarm(getApplication(), alarm)
+            }
         }
     }
 

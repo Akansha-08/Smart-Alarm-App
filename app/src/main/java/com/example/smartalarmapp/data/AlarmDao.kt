@@ -12,6 +12,9 @@ interface AlarmDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)    // replaces if same ID exists
     suspend fun insertAlarm(alarm: Alarm)               // suspend = runs in background thread
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAlarmAndGetId(alarm: Alarm): Long  // returns auto-generated ID after insert
+
     @Update
     suspend fun updateAlarm(alarm: Alarm)               // updates existing alarm by ID
 

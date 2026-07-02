@@ -68,13 +68,14 @@ class AlarmRingingActivity : ComponentActivity() {
         val alarmLabel = intent.getStringExtra("ALARM_LABEL") ?: "Alarm"
         val stepCount = intent.getIntExtra("STEP_COUNT", 10)
 
-        // check if alarm was disabled before it could be canceled
+        // only finish if alarm doesn't exist in DB at all
+        // don't check isEnabled here - AlarmReceiver may have already disabled it
         CoroutineScope(Dispatchers.IO).launch {
             val dao = AlarmDatabase.getDatabase(this@AlarmRingingActivity).alarmDao()
             val alarm = dao.getAlarmById(alarmId)
 
-            // if alarm is disabled, just finish this activity immediately
-            if (alarm == null || !alarm.isEnabled) {
+            // only close if alarm record doesn't exist at all
+            if (alarm == null) {
                 finish()
                 return@launch
             }
